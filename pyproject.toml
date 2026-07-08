@@ -14,8 +14,10 @@ homepage = "https://github.com/cmake-wheel/jrl-cmakemodules"
 upstream = "https://github.com/jrl-umi3218/jrl-cmakemodules"
 
 [tool.cmeel]
+build-number = 1
 has-binaries = false
 has-sitelib = false
+run-tests = false
 
 [tool.tomlsort]
 all = true
