@@ -1,25 +1,93 @@
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_NAME "jrl-cmakemodules")
-set(PROJECT_DESCRIPTION "CMake utility toolbox")
-set(PROJECT_URL "http://github.com/jrl-umi3218/${PROJECT_NAME}")
+project(
+  jrl-cmakemodules
+  DESCRIPTION "JRL CMake utility toolbox"
+  HOMEPAGE_URL "http://github.com/jrl-umi3218/jrl-cmakemodules"
+  VERSION 2.1.0
+  LANGUAGES NONE
+)
 
-project(${PROJECT_NAME} DESCRIPTION ${PROJECT_DESCRIPTION} LANGUAGES CXX)
+# The jrl_print_banner() needs this variable to be set to display the correct version
+set(
+  jrl-cmakemodules_VERSION
+  ${PROJECT_VERSION}
+  CACHE STRING
+  "Version of jrl-cmakemodules"
+)
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  set(PROJECT_JRL_CMAKE_MODULE_DIR ${CMAKE_CURRENT_LIST_DIR})
-  include(base.cmake)
-  COMPUTE_PROJECT_ARGS(PROJECT_ARGS LANGUAGES CXX)
-  project(${PROJECT_NAME} ${PROJECT_ARGS})
+# The JRL CMake Modules V2 API
+include(${CMAKE_CURRENT_SOURCE_DIR}/v2/modules/jrl.cmake)
 
-  # Add a dummy library with a useful INTERFACE_INCLUDE_DIRECTORIES
-  add_library(${PROJECT_NAME} INTERFACE)
-  set(INSTALL_DIR "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}")
-  target_include_directories(
-    ${PROJECT_NAME}
-    INTERFACE $<INSTALL_INTERFACE:${INSTALL_DIR}>
+jrl_print_banner()
+
+# Stop here if this is not the top-level project (included via FetchContent or add_subdirectory)
+if(NOT PROJECT_IS_TOP_LEVEL)
+  return()
+endif()
+
+jrl_configure_defaults()
+
+# JRL_CMAKE_FILES_INSTALL_DIR: Where to install the <project>-config.cmake and related files
+# In CMake, 'share' is CMAKE_INSTALL_DATAROOTDIR
+# Here we choose <install_prefix>/share/cmake/<project>
+set(
+  JRL_CMAKE_FILES_INSTALL_DIR
+  ${CMAKE_INSTALL_DATAROOTDIR}/cmake/jrl-cmakemodules
+)
+
+option(
+  JRL_CMAKEMODULES_GENERATE_API_DOC
+  "Generate the API documentation for jrl-cmakemodules (v2)"
+  OFF
+)
+
+option(
+  JRL_CMAKEMODULES_BUILD_TESTS
+  "Build the tests for jrl-cmakemodules (v2)"
+  OFF
+)
+
+option(JRL_CMAKEMODULES_INSTALL_V2_ONLY "Install only the v2 API" OFF)
+
+if(JRL_CMAKEMODULES_GENERATE_API_DOC)
+  _jrl_generate_api_doc(
+    ${CMAKE_CURRENT_SOURCE_DIR}/v2/modules/jrl.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/v2/docs/api.md
   )
+endif()
 
+if(JRL_CMAKEMODULES_BUILD_TESTS)
+  message(STATUS "[jrl-cmakemodules] Building tests")
+  jrl_include_ctest()
+  enable_testing()
+  add_subdirectory(v2/tests)
+endif()
+
+# Add a dummy library with a useful INTERFACE_INCLUDE_DIRECTORIES
+add_library(jrl-cmakemodules INTERFACE)
+add_library(jrl-cmakemodules::jrl-cmakemodules ALIAS jrl-cmakemodules)
+target_include_directories(
+  jrl-cmakemodules
+  INTERFACE $<INSTALL_INTERFACE:${JRL_CMAKE_FILES_INSTALL_DIR}>
+)
+
+# Install the v2 API
+install(
+  DIRECTORY
+    v2/external-modules
+    v2/find-modules
+    v2/modules
+    v2/templates
+    v2/scripts
+  DESTINATION ${JRL_CMAKE_FILES_INSTALL_DIR}/v2
+  PATTERN ".ruff_cache" EXCLUDE
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN ".pytest_cache" EXCLUDE
+  PATTERN "htmlcov" EXCLUDE
+)
+
+if(NOT JRL_CMAKEMODULES_INSTALL_V2_ONLY)
   # find . -maxdepth 1 -type d ! -path './.*' | sort
   install(
     DIRECTORY
@@ -34,14 +102,27 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
       ./image
       ./sphinx
       ./stubgen
-      ./_unittests
-    DESTINATION ${INSTALL_DIR}
+    # ./_unittests
+    DESTINATION ${JRL_CMAKE_FILES_INSTALL_DIR}
   )
 
-  # find . -maxdepth 1 -type f ! -path './.*' | sort
+  # find . -maxdepth 1 -type f ! -perm 111 ! -path './.*' | sort
+  install(
+    PROGRAMS
+      ./announce-gen
+      ./fix-license.sh
+      ./git-archive-all.py
+      ./git-archive-all.sh
+      ./gitlog-to-changelog
+      ./pixi.py
+      ./pypa-metadata.py
+      ./pyproject.py
+    DESTINATION ${JRL_CMAKE_FILES_INSTALL_DIR}
+  )
+
+  # find . -maxdepth 1 -type f ! -perm /111 ! -path './.*' | sort
   install(
     FILES
-      ./announce-gen
       ./apple.cmake
       ./base.cmake
       ./boost.cmake
@@ -66,11 +147,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
       ./doxygen.cmake
       ./eigen.cmake
       ./filefilter.txt
-      ./fix-license.sh
+      ./flake.lock
+      ./flake.nix
       ./geometric-tools.cmake
-      ./git-archive-all.py
-      ./git-archive-all.sh
-      ./gitlog-to-changelog
       ./GNUInstallDirs.cmake
       ./gtest.cmake
       ./header.cmake
@@ -97,13 +176,12 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
       ./oscheck.cmake
       ./package-config.cmake
       ./package.xml
-      ./pixi.py
       ./pkg-config.cmake
       ./pkg-config.pc.cmake
       ./portability.cmake
       ./post-project.cmake
       ./pthread.cmake
-      ./pyproject.py
+      ./pypa-metadata.cmake
       ./python.cmake
       ./python-helpers.cmake
       ./qhull.cmake
@@ -127,10 +205,21 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
       ./version-script-test.lds
       ./warning.hh.cmake
       ./xacro.cmake
-    DESTINATION ${INSTALL_DIR}
+    DESTINATION ${JRL_CMAKE_FILES_INSTALL_DIR}
   )
-
-  install(TARGETS ${PROJECT_NAME} EXPORT ${TARGETS_EXPORT_NAME})
-
-  SETUP_PROJECT_PACKAGE_FINALIZE()
 endif()
+
+jrl_add_export_component(NAME jrl-cmakemodules TARGETS jrl-cmakemodules)
+jrl_export_package(
+  PACKAGE_CONFIG_EXTRA_CONTENT
+    [[
+include("${CMAKE_CURRENT_LIST_DIR}/v2/modules/jrl.cmake")
+jrl_print_banner()
+    ]]
+  CMAKE_FILES_INSTALL_DIR ${JRL_CMAKE_FILES_INSTALL_DIR}
+)
+
+jrl_generate_ros2_package_files(
+  INSTALL_PYTHON_PACKAGE_FILES OFF
+  DESTINATION ${JRL_CMAKE_FILES_INSTALL_DIR}
+)
